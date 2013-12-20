@@ -120,7 +120,7 @@ PhantomJsHeadlessAnalyzer.prototype.reorderFiles = function (history) {
     var files = [],
         coreFile = this.getSenchaCoreFile(),
         appFile = path.normalize(this.pageRoot + path.sep + this.appJsFilePath);
-    files.push(coreFile);
+//    files.push(coreFile);
     for (var i = 0, len = history.length; i < len; i++) {
         var filePath = history[i];
         if (filePath !== appFile &&
