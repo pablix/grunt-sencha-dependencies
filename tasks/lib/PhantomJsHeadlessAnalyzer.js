@@ -31,16 +31,18 @@ var grunt        = require("grunt"),
  * @param {string/Object} senchaDirOrAppJson The path to the Sencha framework directory OR the JSON from the app.json file for this project
  * @param {string} pageRoot The path to the directory which contains the main html page (usually index.html) relative to where this
  *                 task/grunt will be started
- * @param {boolean/string} isTouchOrPageToProcess If you set the Sencha framework dir then this should be true if you're using Sencha Touch.
- *                                 If you're using an app.json this will be the html page that should be used to process in phantomjs
- *                                 relative to the pageRoot
  * @param {boolean} pageToProcess The page that will be processed when looking for tags
+ * @param {boolean} includeAllScriptTags Include scripts included in the main html page
+ * @param {boolean} senchaCoreFile The name of the sencha core file to include
+ *                  (ext-debug.js / sencha-touch.js / ...). If empty, no sencha file is included
  */
-function PhantomJsHeadlessAnalyzer(appJsFilePath, senchaDirOrAppJson, pageRoot, pageToProcess, includeAllScriptTags) {
+function PhantomJsHeadlessAnalyzer(appJsFilePath, senchaDirOrAppJson, pageRoot, pageToProcess,
+                                   includeAllScriptTags, senchaCoreFile) {
     this.appJsFilePath              = appJsFilePath;
     this.setPageRoot(pageRoot);
     this.pageToProcess              = pageToProcess;
     this.includeAllScriptTags = includeAllScriptTags;
+    this.senchaCoreFile = senchaCoreFile;
     if (typeof senchaDirOrAppJson === "object") {
         // we're in mode where we use appJson
         this.appJson          = senchaDirOrAppJson;
@@ -96,7 +98,12 @@ PhantomJsHeadlessAnalyzer.prototype.getSenchaFrameworkDir = function () {
 };
 
 PhantomJsHeadlessAnalyzer.prototype.getSenchaCoreFile = function () {
-    return path.normalize(this.pageRoot + path.sep + this.senchaDir  + path.sep + (this.isTouch ? "sencha-touch-debug.js" : "ext-debug.js"));
+    if (this.senchaCoreFile === '') {
+        return null;
+    }
+    this.senchaCoreFile = this.senchaCoreFile || (this.isTouch ? "sencha-touch-debug.js" : "ext-debug.js");
+
+    return path.normalize(this.pageRoot + path.sep + this.senchaDir + path.sep + this.senchaCoreFile);
 };
 
 PhantomJsHeadlessAnalyzer.prototype.normaliseFilePaths = function (filePaths) {
@@ -120,7 +127,9 @@ PhantomJsHeadlessAnalyzer.prototype.reorderFiles = function (history) {
     var files = [],
         coreFile = this.getSenchaCoreFile(),
         appFile = path.normalize(this.pageRoot + path.sep + this.appJsFilePath);
-//    files.push(coreFile);
+    if (coreFile) {
+        files.push(coreFile);
+    }
     for (var i = 0, len = history.length; i < len; i++) {
         var filePath = history[i];
         if (filePath !== appFile &&
