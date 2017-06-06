@@ -35,12 +35,14 @@ var grunt        = require("grunt"),
  *                                 If you're using an app.json this will be the html page that should be used to process in phantomjs
  *                                 relative to the pageRoot
  * @param {boolean} pageToProcess The page that will be processed when looking for tags
+ * @param {boolean} failOnError Execute grunt.fail once PhantomJS detects any javascript error 
  */
-function PhantomJsHeadlessAnalyzer(appJsFilePath, senchaDirOrAppJson, pageRoot, pageToProcess, includeAllScriptTags) {
+function PhantomJsHeadlessAnalyzer(appJsFilePath, senchaDirOrAppJson, pageRoot, pageToProcess, includeAllScriptTags, failOnError) {
     this.appJsFilePath              = appJsFilePath;
     this.setPageRoot(pageRoot);
     this.pageToProcess              = pageToProcess;
-    this.includeAllScriptTags = includeAllScriptTags;
+    this.includeAllScriptTags       = includeAllScriptTags;
+    this.failOnError                = failOnError;
     if (typeof senchaDirOrAppJson === "object") {
         // we're in mode where we use appJson
         this.appJson          = senchaDirOrAppJson;
@@ -54,6 +56,14 @@ function PhantomJsHeadlessAnalyzer(appJsFilePath, senchaDirOrAppJson, pageRoot, 
 PhantomJsHeadlessAnalyzer.prototype.setGrunt = function (gruntLive) {
     grunt = gruntLive;
 };
+
+PhantomJsHeadlessAnalyzer.prototype.setExclusions = function (exclude) {
+    this.exclude = exclude || [];
+    if (typeof this.exclude == "string") {
+        this.exclude = [this.exclude];
+    }
+};
+
 
 function removeTrailingSlash(filePath) {
     return filePath[filePath.length - 1] === path.sep ? filePath.substring(0, filePath.length - 1) : filePath;
@@ -120,7 +130,7 @@ PhantomJsHeadlessAnalyzer.prototype.reorderFiles = function (history) {
     var files = [],
         coreFile = this.getSenchaCoreFile(),
         appFile = path.normalize(this.pageRoot + path.sep + this.appJsFilePath);
-    files.push(coreFile);
+    this.addIfNotExcluded(coreFile, files);
     for (var i = 0, len = history.length; i < len; i++) {
         var filePath = history[i];
         if (filePath !== appFile &&
@@ -131,7 +141,7 @@ PhantomJsHeadlessAnalyzer.prototype.reorderFiles = function (history) {
             if (fs.existsSync(filePath)) {
                 var stats = fs.statSync(filePath);
                 if (!stats.isDirectory()) {
-                    files.push(filePath);
+                    this.addIfNotExcluded(filePath, files);
                 }
             } else {
                 grunt.log.warn("Excluding non filesystem based file " + filePath);
@@ -139,9 +149,15 @@ PhantomJsHeadlessAnalyzer.prototype.reorderFiles = function (history) {
         }
     }
     if (!!this.appJsFilePath) {
-        files.push(appFile);
+        this.addIfNotExcluded(appFile, files);
     }
     return files;
+};
+
+PhantomJsHeadlessAnalyzer.prototype.addIfNotExcluded = function (filePath, array) {
+    if (!this.exclude || this.exclude.indexOf(filePath) < 0) {
+        array.push(filePath);
+    }
 };
 
 PhantomJsHeadlessAnalyzer.prototype.setHtmlPageToProcess = function (tempPage) {
@@ -178,7 +194,8 @@ function turnUrlIntoRelativeDirectory(relativeTo, url) {
     if (/^http:/.test(url)) {
         url = url.substring("http://localhost:3000/".length);
     }
-    return path.relative(relativeTo, url.substring(0, url.lastIndexOf("/")));
+	url = path.normalize(url);
+    return path.relative(relativeTo, url.substring(0, url.lastIndexOf(path.sep)));
 }
 
 PhantomJsHeadlessAnalyzer.prototype.startWebServerToHostPage = function (tempPage) {
@@ -186,7 +203,7 @@ PhantomJsHeadlessAnalyzer.prototype.startWebServerToHostPage = function (tempPag
               //.use(connect.logger('dev'))
               .use(connect["static"](process.cwd()))
               .listen(3000);
-    var pathSepReplacement = new RegExp("\\"+path.sep, "g")
+    var pathSepReplacement = new RegExp("\\" + path.sep, "g");
     grunt.log.debug("Connect started: " + "http://localhost:3000/" + tempPage.replace(pathSepReplacement, "/") + "  -  " + process.cwd());
     return "http://localhost:3000/" + tempPage.replace(pathSepReplacement, "/");
 };
@@ -277,7 +294,9 @@ PhantomJsHeadlessAnalyzer.prototype.getDependencies = function (doneFn, task) {
         trace.forEach(function (t) {
             msgStack.push(" -> " + t.file + ": " + t.line + (t["function"] ? " (in function \"" + t["function"] + "\")" : ""));
         });
-        grunt.verbose.error(msgStack.join("\n"));
+        if (errorCount.length === 1 && me.failOnError === true) {
+            grunt.fail.fatal("Grunt execution stopped because options.failOnError is true \n\n"+msgStack.join("\n"));
+        }
     });
 
     // Create some kind of "all done" event.
