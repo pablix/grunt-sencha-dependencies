@@ -201,7 +201,7 @@ function turnUrlIntoRelativeDirectory(relativeTo, url) {
 PhantomJsHeadlessAnalyzer.prototype.startWebServerToHostPage = function (tempPage) {
     this.app = connect()
               //.use(connect.logger('dev'))
-              .use(connect["static"](process.cwd()))
+              .use(connect.static(process.cwd()))
               .listen(3000);
     var pathSepReplacement = new RegExp("\\" + path.sep, "g");
     grunt.log.debug("Connect started: " + "http://localhost:3000/" + tempPage.replace(pathSepReplacement, "/") + "  -  " + process.cwd());
